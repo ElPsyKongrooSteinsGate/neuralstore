@@ -1,40 +1,173 @@
-{
-  "id": "sampledata",
-  "record": {
-    "record_metadata": {
-      "store_id": "NYC-FLAGSHIP-04",
-      "region": "North America",
-      "reporting_period": "Q3-2026",
-      "audited": true
-    },
-    "financial_metrics": {
-      "gross_revenue": 1425030.50,
-      "net_margin_pct": 22.4,
-      "operating_expenses": {
-        "payroll": 450000.00,
-        "marketing": 120500.25,
-        "logistics": 85400.00,
-        "R_and_D": null
-      }
-    },
-    "performance_indicators": [
-      {
-        "kpi_name": "Customer Acquisition Cost",
-        "target": 45.00,
-        "actual": 42.80,
-        "status": "optimal"
+[
+  {
+    "id": "sampledata",
+    "record": {
+      "record_metadata": {
+        "store_id": "NYC-FLAGSHIP-04",
+        "region": "North America",
+        "reporting_period": "Q3-2026",
+        "audited": true
       },
-      {
-        "kpi_name": "Monthly Churn Rate",
-        "target": 2.1,
-        "actual": 2.8,
-        "status": "warning"
+      "financial_metrics": {
+        "gross_revenue": 1425030.50,
+        "net_margin_pct": 22.4,
+        "operating_expenses": {
+          "payroll": 450000.00,
+          "marketing": 120500.25,
+          "logistics": 85400.00,
+          "R_and_D": null
+        }
+      },
+      "performance_indicators": [
+        {
+          "kpi_name": "Customer Acquisition Cost",
+          "target": 45.00,
+          "actual": 42.80,
+          "status": "optimal"
+        },
+        {
+          "kpi_name": "Monthly Churn Rate",
+          "target": 2.1,
+          "actual": 2.8,
+          "status": "warning"
+        }
+      ],
+      "customer_segments": ["enterprise", "mid-market", "high-intent"],
+      "risk_assessment": {
+        "supply_chain_volatility": "medium",
+        "regulatory_compliance_score": 98.5
       }
-    ],
-    "customer_segments": ["enterprise", "mid-market", "high-intent"],
-    "risk_assessment": {
-      "supply_chain_volatility": "medium",
-      "regulatory_compliance_score": 98.5
+    }
+  },
+  {
+    "id": "telemetry-994",
+    "record": {
+      "device_metadata": {
+        "node_id": "EDGE-SW-IOT-09",
+        "cluster": "APAC-SOUTH",
+        "firmware_version": "v4.12.0-rc2",
+        "active_status": true
+      },
+      "telemetry_metrics": {
+        "cpu_utilization_pct": 84.6,
+        "memory_pressure_pct": 91.2,
+        "resource_consumption": {
+          "ingress_mbps": 450.25,
+          "egress_mbps": 128.80,
+          "packet_loss_rate": 0.014,
+          "buffer_overflows": null
+        }
+      },
+      "hardware_sensors": [
+        {
+          "sensor_type": "core_temperature",
+          "threshold": 75.0,
+          "reading": 78.4,
+          "state": "warning"
+        },
+        {
+          "sensor_type": "voltage_stability",
+          "threshold": 12.0,
+          "reading": 11.95,
+          "state": "nominal"
+        }
+      ],
+      "protocol_tags": ["mqtt", "grpc", "tls-1.3"],
+      "anomaly_detection": {
+        "threat_level": "elevated",
+        "anomaly_score": 0.892
+      }
+    }
+  },
+  {
+    "id": "supply-chain-logistics-8821",
+    "record": {
+      "shipment_metadata": {
+        "tracking_code": "TRK-99281-AZ",
+        "origin_facility": {
+          "hub_name": "Frankfurt Central Distribution",
+          "coordinates": {
+            "latitude": 50.1109,
+            "longitude": 8.6821,
+            "elevation_meters": 112.5
+          },
+          "manager_contact": {
+            "name": "Klaus Werner",
+            "department": "European Freight Operations",
+            "cleared_security": true
+          }
+        },
+        "destination_facility": {
+          "hub_name": "Singapore Mega Terminal",
+          "coordinates": {
+            "latitude": 1.3521,
+            "longitude": 103.8198,
+            "elevation_meters": 15.0
+          },
+          "manager_contact": {
+            "name": "Mei Ling Tan",
+            "department": "APAC Logistics Management",
+            "cleared_security": true
+          }
+        },
+        "dispatch_timestamp": "2026-10-14T08:30:00Z",
+        "priority_tier": "express"
+      },
+      "cargo_manifest": {
+        "total_weight_kg": 48500.25,
+        "container_units": [
+          {
+            "container_id": "CONT-A101",
+            "content_type": "precision_semiconductors",
+            "hazardous": false,
+            "sub_components": {
+              "wafers": 1200,
+              "silicon_boules": 45,
+              "packaging_specs": {
+                "shock_absorbent": true,
+                "temperature_controlled": true,
+                "target_temp_celsius": 18.5
+              }
+            }
+          },
+          {
+            "container_id": "CONT-B202",
+            "content_type": "lithium_ion_cells",
+            "hazardous": true,
+            "sub_components": {
+              "unit_count": 8000,
+              "voltage": 48.0,
+              "hazard_classification": "Class-9",
+              "certifications": ["UN38.3", "ISO-14001", "IEC-62133"]
+            }
+          }
+        ]
+      },
+      "environmental_telemetry": {
+        "average_transit_temperature_celsius": 19.2,
+        "max_humidity_spike_pct": 65.4,
+        "shock_events_recorded": [
+          {
+            "timestamp": "2026-10-15T14:12:00Z",
+            "g_force": 2.1,
+            "axis": "Z",
+            "resolved": true
+          },
+          {
+            "timestamp": "2026-10-17T02:45:00Z",
+            "g_force": 4.8,
+            "axis": "X",
+            "resolved": false
+          }
+        ]
+      },
+      "customs_and_compliance": {
+        "clearance_status": "conditional",
+        "tariffs_paid_usd": 142000.50,
+        "inspected_by_agency": "International Maritime Trade Bureau",
+        "violations": null
+      },
+      "routing_tags": ["maritime", "malacca_straits", "tier-1-freight"]
     }
   }
-}
+]

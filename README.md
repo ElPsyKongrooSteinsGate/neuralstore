@@ -19,7 +19,7 @@ NeuralStore is an experimental hybrid neural database implemented in Python and 
 - Python 3.10 or newer (the implementation uses modern type-annotation syntax).
 - PyTorch.
 
-Install PyTorch using the instructions appropriate for your operating system and hardware at [pytorch.org](https://pytorch.org/get-started/locally/). The project currently has no dependency manifest; `neuralstore.py` is the implementation module.
+Install PyTorch using the instructions appropriate for your operating system and hardware at [pytorch.org](https://pytorch.org/get-started/locally/). The dependency is listed in `requirements.txt`; `neuralstore.py` is the implementation module.
 
 ## Quick start
 
@@ -44,18 +44,28 @@ Insertion and update perform online training, so they are more computationally e
 
 ## Command-line usage
 
-Run `python main.py` from Command Prompt to open the interactive prompt. It supports `add`, `read`, `update`, `delete`, `search`, `list`, and `quit`. Records and search queries are entered as JSON when prompted. The CLI automatically loads the checkpoint `neuralstore.pt` if it exists and saves it after changes.
+Run `python main.py` from Command Prompt to open the interactive prompt. It supports `add`, `import-json`, `read`, `update`, `delete`, `search`, `list`, and `quit`. Records and search queries are entered as JSON when prompted. The CLI automatically loads the checkpoint `neuralstore.pt` if it exists and saves it after changes.
 
 One-shot commands are also available. Put `--db <checkpoint>` before the command to select a different checkpoint:
 
 ```text
 python main.py add user-001 "{\"name\": \"Ada\", \"role\": \"engineer\"}"
+python main.py import-json records.json
 python main.py read user-001
 python main.py search "{\"role\": \"engineer\"}" --top-k 3
 python main.py list
 ```
 
 Use `python main.py --help` to see the command options.
+
+The `import-json` command accepts a JSON object mapping record IDs to records, a single `{"id": "...", "record": {...}}` object, or a list of objects with `id` and `record` fields. It validates the file and rejects IDs that already exist rather than replacing stored records. For example:
+
+```json
+[
+    {"id": "user-001", "record": {"name": "Ada", "role": "engineer"}},
+    {"id": "user-002", "record": {"name": "Linus", "role": "maintainer"}}
+]
+```
 
 ## Technical specification
 

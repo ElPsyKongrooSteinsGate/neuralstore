@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from functions.json_file import import_json_file
 from neuralstore import NeuralStore
 
 
@@ -40,7 +41,7 @@ def print_matches(matches: list[dict[str, Any]]) -> None:
 
 def run_interactive(store: NeuralStore, db_path: Path) -> None:
     print(f"NeuralStore CLI — database: {db_path}")
-    print("Commands: add, read, update, delete, search, list, quit")
+    print("Commands: add, import-json, read, update, delete, search, list, quit")
     print('Enter records and search queries as JSON, e.g. {"name": "Ada"}.')
 
     while True:
@@ -60,6 +61,12 @@ def run_interactive(store: NeuralStore, db_path: Path) -> None:
                 store.insert(record_id, record)
                 store.save(str(db_path))
                 print("Record added and saved.")
+                continue
+            if command == "import-json":
+                file_path = input("JSON file path: ").strip().strip('"')
+                imported = import_json_file(store, file_path)
+                store.save(str(db_path))
+                print(f"Imported {imported} record(s) and saved.")
                 continue
             if command == "update":
                 record_id = input("Record ID: ").strip()
@@ -85,11 +92,11 @@ def run_interactive(store: NeuralStore, db_path: Path) -> None:
                 print_matches(store.search(query, top_k=top_k))
                 continue
             if command in {"help", "?"}:
-                print("Commands: add, read, update, delete, search, list, quit")
+                print("Commands: add, import-json, read, update, delete, search, list, quit")
                 continue
             if command:
                 print(f"Unknown command: {command}. Type 'help' for commands.")
-        except (ValueError, KeyError) as exc:
+        except (ValueError, KeyError, OSError) as exc:
             print(f"Error: {exc}")
         except (EOFError, KeyboardInterrupt):
             print()
@@ -111,6 +118,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_parser = subparsers.add_parser("add", help="insert a JSON record")
     add_parser.add_argument("record_id")
     add_parser.add_argument("json_record", help="record as a JSON string")
+
+    import_parser = subparsers.add_parser(
+        "import-json", help="insert records from a JSON file"
+    )
+    import_parser.add_argument("json_file", type=Path, help="path to the JSON file")
 
     read_parser = subparsers.add_parser("read", help="read a record by ID")
     read_parser.add_argument("record_id")
@@ -145,6 +157,10 @@ def main() -> int:
             store.insert(args.record_id, parse_record(args.json_record))
             store.save(str(db_path))
             print(f"Added {args.record_id!r} to {db_path}.")
+        elif args.command == "import-json":
+            imported = import_json_file(store, args.json_file)
+            store.save(str(db_path))
+            print(f"Imported {imported} record(s) from {args.json_file} into {db_path}.")
         elif args.command == "read":
             print(json.dumps(store.read(args.record_id), ensure_ascii=False, indent=2))
         elif args.command == "update":

@@ -42,6 +42,21 @@ restored = NeuralStore.load("neuralstore.pt")
 
 Insertion and update perform online training, so they are more computationally expensive than ordinary dictionary operations. The first record has no preceding record for sequence-prediction training.
 
+## Command-line usage
+
+Run `python main.py` from Command Prompt to open the interactive prompt. It supports `add`, `read`, `update`, `delete`, `search`, `list`, and `quit`. Records and search queries are entered as JSON when prompted. The CLI automatically loads the checkpoint `neuralstore.pt` if it exists and saves it after changes.
+
+One-shot commands are also available. Put `--db <checkpoint>` before the command to select a different checkpoint:
+
+```text
+python main.py add user-001 "{\"name\": \"Ada\", \"role\": \"engineer\"}"
+python main.py read user-001
+python main.py search "{\"role\": \"engineer\"}" --top-k 3
+python main.py list
+```
+
+Use `python main.py --help` to see the command options.
+
 ## Technical specification
 
 ### Architecture

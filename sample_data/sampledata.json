@@ -1,0 +1,40 @@
+{
+  "id": "sampledata",
+  "record": {
+    "record_metadata": {
+      "store_id": "NYC-FLAGSHIP-04",
+      "region": "North America",
+      "reporting_period": "Q3-2026",
+      "audited": true
+    },
+    "financial_metrics": {
+      "gross_revenue": 1425030.50,
+      "net_margin_pct": 22.4,
+      "operating_expenses": {
+        "payroll": 450000.00,
+        "marketing": 120500.25,
+        "logistics": 85400.00,
+        "R_and_D": null
+      }
+    },
+    "performance_indicators": [
+      {
+        "kpi_name": "Customer Acquisition Cost",
+        "target": 45.00,
+        "actual": 42.80,
+        "status": "optimal"
+      },
+      {
+        "kpi_name": "Monthly Churn Rate",
+        "target": 2.1,
+        "actual": 2.8,
+        "status": "warning"
+      }
+    ],
+    "customer_segments": ["enterprise", "mid-market", "high-intent"],
+    "risk_assessment": {
+      "supply_chain_volatility": "medium",
+      "regulatory_compliance_score": 98.5
+    }
+  }
+}

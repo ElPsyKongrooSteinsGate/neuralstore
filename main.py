@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from functions.json_file import import_json_file
+from functions.data.json.json_file import import_json_file
 from neuralstore import NeuralStore
 
 

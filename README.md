@@ -58,7 +58,23 @@ python main.py list
 
 Use `python main.py --help` to see the command options.
 
-The `import-json` command accepts a JSON object mapping record IDs to records, a single `{"id": "...", "record": {...}}` object, or a list of objects with `id` and `record` fields. It validates the file and rejects IDs that already exist rather than replacing stored records. For example:
+The `import-json` command accepts three JSON formats. The recommended format for one record is an object with an `id` and a `record` property. The `record` can contain any valid JSON data, including nested objects and arrays:
+
+```json
+{
+    "id": "user-001",
+    "record": {
+        "name": "Ada",
+        "role": "engineer",
+        "active": true,
+        "details": {
+            "city": "London"
+        }
+    }
+}
+```
+
+For multiple records, use a list of objects with `id` and `record` properties:
 
 ```json
 [
@@ -66,6 +82,33 @@ The `import-json` command accepts a JSON object mapping record IDs to records, a
     {"id": "user-002", "record": {"name": "Linus", "role": "maintainer"}}
 ]
 ```
+
+Alternatively, provide a JSON object mapping record IDs directly to record values:
+
+```json
+{
+    "user-001": {"name": "Ada", "role": "engineer"},
+    "user-002": {"name": "Linus", "role": "maintainer"}
+}
+```
+
+The importer validates the file and rejects IDs that already exist rather than replacing stored records. Each ID must be a non-empty string, and record values must be valid JSON data. Import a file with:
+
+```text
+python main.py import-json records.json
+```
+
+### Import and search the included sample
+
+The sample file at `sample_data/sampledata.json` contains one record with ID `sampledata`. From the project directory in Windows Command Prompt, import it into a separate checkpoint and search for its store ID:
+
+```text
+python main.py --db sample_neuralstore.pt import-json sample_data/sampledata.json
+python main.py --db sample_neuralstore.pt search "{\"record_metadata\": {\"store_id\": \"NYC-FLAGSHIP-04\"}}" --top-k 3
+python main.py --db sample_neuralstore.pt read sampledata
+```
+
+The `--db` option keeps this example's data in `sample_neuralstore.pt` rather than mixing it with the default `neuralstore.pt` database. Run the import command only once for that checkpoint; importing again will report that `sampledata` already exists.
 
 ## Technical specification
 

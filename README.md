@@ -21,6 +21,20 @@ NeuralStore is an experimental hybrid neural database implemented in Python and 
 
 Install PyTorch using the instructions appropriate for your operating system and hardware at [pytorch.org](https://pytorch.org/get-started/locally/). The dependency is listed in `requirements.txt`; `neuralstore.py` is the implementation module.
 
+## Project layout
+
+```text
+neuralstore.py       Core storage engine and neural model
+main.py              Command-line interface
+benchmark.py         Performance benchmark
+data/
+    import_json.py     JSON import helper
+    samples/           Example JSON data
+tests/               Automated regression and integration tests
+README.md            Documentation
+requirements.txt     Python dependencies
+```
+
 ## Quick start
 
 ```python
@@ -122,10 +136,10 @@ python main.py import-json records.json
 
 ### Import and search the included sample
 
-The sample file at `sample_data/sampledata.json` contains three records, including IDs `sampledata`, `telemetry-994`, and `supply-chain-logistics-8821`. From the project directory in Windows Command Prompt, import them into a separate checkpoint and search for the store ID:
+The sample file at `data/samples/sampledata.json` contains three records, including IDs `sampledata`, `telemetry-994`, and `supply-chain-logistics-8821`. From the project directory in Windows Command Prompt, import them into a separate checkpoint and search for the store ID:
 
 ```text
-python main.py --db sample_neuralstore.pt import-json sample_data/sampledata.json
+python main.py --db sample_neuralstore.pt import-json data/samples/sampledata.json
 python main.py --db sample_neuralstore.pt search "{\"record_metadata\": {\"store_id\": \"NYC-FLAGSHIP-04\"}}" --top-k 3
 python main.py --db sample_neuralstore.pt read sampledata
 ```
@@ -140,7 +154,7 @@ Run the regression tests from the project directory with:
 python -m unittest discover -s tests -v
 ```
 
-The tests cover batch insertion, JSON import, search ranking, update/delete behavior, and checkpoint save/load. One integration test imports the actual `sample_data/sampledata.json` file into a temporary store, reads and searches records, updates and deletes records, and verifies that the changes survive checkpoint reload. Temporary checkpoints are used, so the tests do not modify your regular database files.
+The tests cover batch insertion, JSON import, search ranking, update/delete behavior, and checkpoint save/load. One integration test imports the actual `data/samples/sampledata.json` file into a temporary store, reads and searches records, updates and deletes records, and verifies that the changes survive checkpoint reload. Temporary checkpoints are used, so the tests do not modify your regular database files.
 
 ## Technical specification
 

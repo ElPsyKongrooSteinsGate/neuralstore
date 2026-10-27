@@ -8,7 +8,7 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
-from functions.data.json.json_file import import_json_file
+from data.import_json import import_json_file
 from neuralstore import NeuralStore
 
 
@@ -85,7 +85,7 @@ class NeuralStoreOptimizationTests(unittest.TestCase):
             self.assertEqual(store.training_steps, 1)
 
     def test_sample_data_import_search_update_delete_and_reload(self) -> None:
-        sample_path = Path(__file__).parent.parent / "sample_data" / "sampledata.json"
+        sample_path = Path(__file__).parent.parent / "data" / "samples" / "sampledata.json"
         with tempfile.TemporaryDirectory() as directory:
             checkpoint = Path(directory) / "sample-store.pt"
             store = self.make_store()

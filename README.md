@@ -59,7 +59,7 @@ Insertion and update perform online training, so they are more computationally e
 
 ## Command-line usage
 
-Run `python main.py` from Command Prompt to open the interactive prompt. It supports `add`, `import-json`, `read`, `update`, `delete`, `search`, `stats`, `list`, and `quit`. Records and search queries are entered as JSON when prompted. The CLI automatically loads the checkpoint `neuralstore.pt` if it exists and saves it after changes.
+Run `python main.py` from Command Prompt to open the interactive prompt. It supports `add`, `import-json`, `read`, `update`, `delete`, `search`, `stats`, `analytics importance`, `list`, and `quit`. Records and search queries are entered as JSON when prompted. The CLI automatically loads the checkpoint `neuralstore.pt` if it exists and saves it after changes.
 
 One-shot commands are also available. Put `--db <checkpoint>` before the command to select a different checkpoint:
 
@@ -69,12 +69,15 @@ python main.py import-json records.json
 python main.py read user-001
 python main.py search "{\"role\": \"engineer\"}" --top-k 3
 python main.py stats
+python main.py analytics importance
 python main.py list
 ```
 
 Use `python main.py --help` to see the command options.
 
 `stats` reports record and unique-ID counts, training steps, the latest loss, latent dimensions, serialized record payload sizes, common field occurrences, leaf value types, and null/empty values. Field counts are occurrences, not record coverage. The payload size excludes checkpoint and model overhead. The same report is available by entering `stats` in the interactive prompt.
+
+`analytics importance` summarizes valid record importance scores and lists up to five highest- and lowest-scoring IDs. Scores that are non-finite or outside `[0, 1]` are excluded and shown separately. Importance is an estimate of reconstruction difficulty for the current model, not an objective measure of business value or usefulness. Use `analytics importance` in the interactive prompt for the same report.
 
 ## Draft benchmark
 
@@ -236,4 +239,10 @@ Records are serialized as JSON in the checkpoint, while model and optimizer tens
 
 ## License
 
-No license is specified in this repository. Add a license file before distributing or reusing the project if a particular license is intended.
+This project is released under the permissive [MIT License](LICENSE). You may use, copy, modify, distribute, sublicense, and sell copies of the software, provided the copyright and permission notice is included. The software is provided without warranty; see [LICENSE](LICENSE) for the full terms.
+
+## Responsible and community-friendly use
+
+Use NeuralStore lawfully and responsibly. Respect privacy, data-protection requirements, intellectual-property rights, and the rights of people whose data you process. Do not use the project to facilitate unlawful discrimination, harassment, surveillance, or other harmful activity. Be transparent with users about how data and automated similarity results are used, and review consequential decisions with appropriate human judgment.
+
+These are community expectations and responsible-use guidance; they do not add restrictions to or replace the MIT License. This project is experimental and does not provide legal, privacy, or compliance advice. You are responsible for evaluating whether your use complies with applicable laws and obligations.

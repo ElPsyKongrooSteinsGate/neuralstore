@@ -10,6 +10,7 @@ from typing import Any
 
 from analytics.importance import print_importance_analytics
 from analytics.integrity import print_integrity_report
+from analytics.search import print_search_diagnostics
 from analytics.stats import print_database_stats
 from data.import_json import import_json_file
 from neuralstore import NeuralStore
@@ -42,7 +43,7 @@ def print_matches(matches: list[dict[str, Any]]) -> None:
 
 def run_interactive(store: NeuralStore, db_path: Path) -> None:
     print(f"NeuralStore CLI — database: {db_path}")
-    print("Commands: add, import-json, read, update, delete, search, stats, analytics importance/integrity, list, quit")
+    print("Commands: add, import-json, read, update, delete, search, stats, analytics importance/integrity/search, list, quit")
     print('Enter records and search queries as JSON, e.g. {"name": "Ada"}.')
     while True:
         try:
@@ -84,8 +85,12 @@ def run_interactive(store: NeuralStore, db_path: Path) -> None:
                 print_importance_analytics(store)
             elif command in {"analytics integrity", "integrity"}:
                 print_integrity_report(store)
+            elif command in {"analytics search", "search-diagnostics"}:
+                query = parse_record(input("Query JSON: "))
+                raw_top_k = input("Number of results [5]: ").strip()
+                print_search_diagnostics(store, query, top_k=int(raw_top_k) if raw_top_k else 5)
             elif command in {"help", "?"}:
-                print("Commands: add, import-json, read, update, delete, search, stats, analytics importance/integrity, list, quit")
+                print("Commands: add, import-json, read, update, delete, search, stats, analytics importance/integrity/search, list, quit")
             elif command:
                 print(f"Unknown command: {command}. Type 'help' for commands.")
         except (ValueError, KeyError, OSError) as exc:
@@ -121,6 +126,11 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_subparsers = analytics_parser.add_subparsers(dest="analytics_command", required=True)
     analytics_subparsers.add_parser("importance", help="summarize record importance scores")
     analytics_subparsers.add_parser("integrity", help="check internal store consistency")
+    search_analytics_parser = analytics_subparsers.add_parser(
+        "search", help="diagnose search scores and ranking changes"
+    )
+    search_analytics_parser.add_argument("json_query", help="query as a JSON string")
+    search_analytics_parser.add_argument("--top-k", type=int, default=5)
     subparsers.add_parser("list", help="list all records")
     subparsers.add_parser("repl", help="start the interactive prompt")
     return parser
@@ -160,6 +170,12 @@ def main() -> int:
             print_importance_analytics(store)
         elif args.command == "analytics" and args.analytics_command == "integrity":
             print_integrity_report(store)
+        elif args.command == "analytics" and args.analytics_command == "search":
+            print_search_diagnostics(
+                store,
+                parse_record(args.json_query),
+                top_k=args.top_k,
+            )
         elif args.command == "list":
             for item in store.all_records():
                 print(f"{item['id']}: {json.dumps(item['record'], ensure_ascii=False)}")

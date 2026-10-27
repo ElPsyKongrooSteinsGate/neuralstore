@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from analytics.stats import print_database_stats
 from data.import_json import import_json_file
 from neuralstore import NeuralStore
 
@@ -39,7 +40,7 @@ def print_matches(matches: list[dict[str, Any]]) -> None:
 
 def run_interactive(store: NeuralStore, db_path: Path) -> None:
     print(f"NeuralStore CLI — database: {db_path}")
-    print("Commands: add, import-json, read, update, delete, search, list, quit")
+    print("Commands: add, import-json, read, update, delete, search, stats, list, quit")
     print('Enter records and search queries as JSON, e.g. {"name": "Ada"}.')
     while True:
         try:
@@ -75,8 +76,10 @@ def run_interactive(store: NeuralStore, db_path: Path) -> None:
                 query = parse_record(input("Query JSON: "))
                 raw_top_k = input("Number of results [5]: ").strip()
                 print_matches(store.search(query, top_k=int(raw_top_k) if raw_top_k else 5))
+            elif command == "stats":
+                print_database_stats(store, db_path)
             elif command in {"help", "?"}:
-                print("Commands: add, import-json, read, update, delete, search, list, quit")
+                print("Commands: add, import-json, read, update, delete, search, stats, list, quit")
             elif command:
                 print(f"Unknown command: {command}. Type 'help' for commands.")
         except (ValueError, KeyError, OSError) as exc:
@@ -107,6 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument("json_query", help="query as a JSON string")
     search_parser.add_argument("--top-k", type=int, default=5)
     search_parser.add_argument("--latent-weight", type=float, default=0.8)
+    subparsers.add_parser("stats", help="show database and model statistics")
     subparsers.add_parser("list", help="list all records")
     subparsers.add_parser("repl", help="start the interactive prompt")
     return parser
@@ -140,6 +144,8 @@ def main() -> int:
         elif args.command == "search":
             print_matches(store.search(parse_record(args.json_query), top_k=args.top_k,
                                        latent_weight=args.latent_weight))
+        elif args.command == "stats":
+            print_database_stats(store, db_path)
         elif args.command == "list":
             for item in store.all_records():
                 print(f"{item['id']}: {json.dumps(item['record'], ensure_ascii=False)}")

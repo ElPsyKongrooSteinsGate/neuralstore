@@ -31,6 +31,7 @@ data/
     import_json.py     JSON import helper
     samples/           Example JSON data
 tests/               Automated regression and integration tests
+analytics/stats.py   Database statistics report
 README.md            Documentation
 requirements.txt     Python dependencies
 ```
@@ -58,7 +59,7 @@ Insertion and update perform online training, so they are more computationally e
 
 ## Command-line usage
 
-Run `python main.py` from Command Prompt to open the interactive prompt. It supports `add`, `import-json`, `read`, `update`, `delete`, `search`, `list`, and `quit`. Records and search queries are entered as JSON when prompted. The CLI automatically loads the checkpoint `neuralstore.pt` if it exists and saves it after changes.
+Run `python main.py` from Command Prompt to open the interactive prompt. It supports `add`, `import-json`, `read`, `update`, `delete`, `search`, `stats`, `list`, and `quit`. Records and search queries are entered as JSON when prompted. The CLI automatically loads the checkpoint `neuralstore.pt` if it exists and saves it after changes.
 
 One-shot commands are also available. Put `--db <checkpoint>` before the command to select a different checkpoint:
 
@@ -67,10 +68,13 @@ python main.py add user-001 "{\"name\": \"Ada\", \"role\": \"engineer\"}"
 python main.py import-json records.json
 python main.py read user-001
 python main.py search "{\"role\": \"engineer\"}" --top-k 3
+python main.py stats
 python main.py list
 ```
 
 Use `python main.py --help` to see the command options.
+
+`stats` reports record and unique-ID counts, training steps, the latest loss, latent dimensions, serialized record payload sizes, common field occurrences, leaf value types, and null/empty values. Field counts are occurrences, not record coverage. The payload size excludes checkpoint and model overhead. The same report is available by entering `stats` in the interactive prompt.
 
 ## Draft benchmark
 

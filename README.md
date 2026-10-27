@@ -58,6 +58,28 @@ python main.py list
 
 Use `python main.py --help` to see the command options.
 
+## Draft benchmark
+
+Run `python benchmark.py` to measure approximate insert and search latency at several record counts. By default, it tests 100, 500, and 1,000 records and reports median and p95 timings. This is a local microbenchmark draft, not a rigorous performance test; results vary with hardware, Python/PyTorch builds, and system load. It creates temporary in-memory stores and does not modify the saved database.
+
+You can choose sizes and reduce the work for a quick check:
+
+```text
+python benchmark.py --sizes 10 50 --search-repeats 5
+```
+
+#### Example benchmark results
+
+One local run produced the following results (times are approximate and machine-dependent):
+
+| Records | Insert median | Insert p95 | Search median | Search p95 | Training steps |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 100 | 21.32 ms | 44.86 ms | 2.78 ms | 3.60 ms | 100 |
+| 500 | 86.94 ms | 174.98 ms | 11.95 ms | 16.38 ms | 500 |
+| 1,000 | 177.21 ms | 359.10 ms | 24.00 ms | 28.95 ms | 1,000 |
+
+This is a single draft run, not a statistically rigorous benchmark. Search latency rises with record count because search compares the query against every stored record. Insert latency also grows because each insertion trains the model and refreshes learned record keys. Re-run on the target machine under representative conditions before using these figures for capacity planning.
+
 The `import-json` command accepts three JSON formats. The recommended format for one record is an object with an `id` and a `record` property. The `record` can contain any valid JSON data, including nested objects and arrays:
 
 ```json

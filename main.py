@@ -8,10 +8,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from analytics.benchmark import print_search_benchmark
 from analytics.importance import print_importance_analytics
 from analytics.integrity import print_integrity_report
 from analytics.search import print_search_diagnostics
 from analytics.stats import print_database_stats
+from analytics.training import print_training_history
+from analytics.retrieval import print_retrieval_evaluation
 from data.import_json import import_json_file
 from neuralstore import NeuralStore
 
@@ -43,7 +46,7 @@ def print_matches(matches: list[dict[str, Any]]) -> None:
 
 def run_interactive(store: NeuralStore, db_path: Path) -> None:
     print(f"NeuralStore CLI — database: {db_path}")
-    print("Commands: add, import-json, read, update, delete, search, stats, analytics importance/integrity/search, list, quit")
+    print("Commands: add, import-json, read, update, delete, search, benchmark, stats, analytics importance/integrity/search, list, quit")
     print('Enter records and search queries as JSON, e.g. {"name": "Ada"}.')
     while True:
         try:
@@ -81,6 +84,9 @@ def run_interactive(store: NeuralStore, db_path: Path) -> None:
                 print_matches(store.search(query, top_k=int(raw_top_k) if raw_top_k else 5))
             elif command == "stats":
                 print_database_stats(store, db_path)
+            elif command == "benchmark":
+                raw_iterations = input("Search iterations [100]: ").strip()
+                print_search_benchmark(store, int(raw_iterations) if raw_iterations else 100)
             elif command in {"analytics importance", "importance"}:
                 print_importance_analytics(store)
             elif command in {"analytics integrity", "integrity"}:
@@ -89,8 +95,17 @@ def run_interactive(store: NeuralStore, db_path: Path) -> None:
                 query = parse_record(input("Query JSON: "))
                 raw_top_k = input("Number of results [5]: ").strip()
                 print_search_diagnostics(store, query, top_k=int(raw_top_k) if raw_top_k else 5)
+            elif command in {"analytics training", "training-history"}:
+                raw_last = input("Recent training steps [100]: ").strip()
+                print_training_history(store, last=int(raw_last) if raw_last else 100)
+            elif command in {"analytics evaluate", "evaluate"}:
+                path = input("Labeled evaluation JSON path: ").strip().strip('"')
+                raw_top_k = input("Top-k [5]: ").strip()
+                print_retrieval_evaluation(
+                    store, path, top_k=int(raw_top_k) if raw_top_k else 5
+                )
             elif command in {"help", "?"}:
-                print("Commands: add, import-json, read, update, delete, search, stats, analytics importance/integrity/search, list, quit")
+                print("Commands: add, import-json, read, update, delete, search, benchmark, stats, analytics importance/integrity/search/training/evaluate, list, quit")
             elif command:
                 print(f"Unknown command: {command}. Type 'help' for commands.")
         except (ValueError, KeyError, OSError) as exc:
@@ -121,6 +136,8 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument("json_query", help="query as a JSON string")
     search_parser.add_argument("--top-k", type=int, default=5)
     search_parser.add_argument("--latent-weight", type=float, default=0.8)
+    benchmark_parser = subparsers.add_parser("benchmark", help="benchmark search latency on the selected database")
+    benchmark_parser.add_argument("--iterations", type=int, default=100)
     subparsers.add_parser("stats", help="show database and model statistics")
     analytics_parser = subparsers.add_parser("analytics", help="show analytics reports")
     analytics_subparsers = analytics_parser.add_subparsers(dest="analytics_command", required=True)
@@ -131,6 +148,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search_analytics_parser.add_argument("json_query", help="query as a JSON string")
     search_analytics_parser.add_argument("--top-k", type=int, default=5)
+    training_parser = analytics_subparsers.add_parser(
+        "training", help="summarize recent combined training losses"
+    )
+    training_parser.add_argument("--last", type=int, default=100,
+                                 help="number of recent training steps to summarize")
+    evaluate_parser = analytics_subparsers.add_parser(
+        "evaluate", help="evaluate retrieval against labeled queries in a JSON file"
+    )
+    evaluate_parser.add_argument("json_file", type=Path, help="labeled query JSON file")
+    evaluate_parser.add_argument("--top-k", type=int, default=5)
     subparsers.add_parser("list", help="list all records")
     subparsers.add_parser("repl", help="start the interactive prompt")
     return parser
@@ -166,6 +193,8 @@ def main() -> int:
                                        latent_weight=args.latent_weight))
         elif args.command == "stats":
             print_database_stats(store, db_path)
+        elif args.command == "benchmark":
+            print_search_benchmark(store, iterations=args.iterations)
         elif args.command == "analytics" and args.analytics_command == "importance":
             print_importance_analytics(store)
         elif args.command == "analytics" and args.analytics_command == "integrity":
@@ -176,6 +205,10 @@ def main() -> int:
                 parse_record(args.json_query),
                 top_k=args.top_k,
             )
+        elif args.command == "analytics" and args.analytics_command == "training":
+            print_training_history(store, last=args.last)
+        elif args.command == "analytics" and args.analytics_command == "evaluate":
+            print_retrieval_evaluation(store, args.json_file, top_k=args.top_k)
         elif args.command == "list":
             for item in store.all_records():
                 print(f"{item['id']}: {json.dumps(item['record'], ensure_ascii=False)}")

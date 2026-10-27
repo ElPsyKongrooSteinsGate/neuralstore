@@ -31,7 +31,7 @@ data/
     import_json.py     JSON import helper
     samples/           Example JSON data
 tests/               Automated regression and integration tests
-analytics/stats.py   Database statistics report
+analytics/           Database, search, training, and integrity analytics
 README.md            Documentation
 requirements.txt     Python dependencies
 ```
@@ -59,7 +59,7 @@ Insertion and update perform online training, so they are more computationally e
 
 ## Command-line usage
 
-Run `python main.py` from Command Prompt to open the interactive prompt. It supports `add`, `import-json`, `read`, `update`, `delete`, `search`, `stats`, `analytics importance`, `analytics integrity`, `analytics search`, `list`, and `quit`. Records and search queries are entered as JSON when prompted. The CLI automatically loads the checkpoint `neuralstore.pt` if it exists and saves it after changes.
+Run `python main.py` from Command Prompt to open the interactive prompt. It supports `add`, `import-json`, `read`, `update`, `delete`, `search`, `benchmark`, `stats`, `analytics importance`, `analytics integrity`, `analytics search`, `analytics training`, `analytics evaluate`, `list`, and `quit`. Records and search queries are entered as JSON when prompted. The CLI automatically loads the checkpoint `neuralstore.pt` if it exists and saves it after changes.
 
 One-shot commands are also available. Put `--db <checkpoint>` before the command to select a different checkpoint:
 
@@ -72,6 +72,9 @@ python main.py stats
 python main.py analytics importance
 python main.py analytics integrity
 python main.py analytics search "{\"role\": \"engineer\"}" --top-k 5
+python main.py benchmark --iterations 100
+python main.py analytics training --last 100
+python main.py analytics evaluate evaluation_queries.json --top-k 5
 python main.py list
 ```
 
@@ -84,6 +87,29 @@ Use `python main.py --help` to see the command options.
 `analytics integrity` checks consistency between records, feature tensors, cached latent and feature keys, search matrices, importance scores, and model parameters. It reports missing/orphaned data, invalid tensor shapes or values, and mismatched matrix rows. The command is read-only: it does not repair the store, reload checkpoints, or assess semantic search quality. It is also available as `analytics integrity` in the interactive prompt.
 
 `analytics search` shows latent and feature similarities for the top matches, compares top-k rankings at latent weights 0, 0.25, 0.5, 0.75, and 1.0, and marks high feature-similarity candidates as possible near-duplicates. The near-duplicate threshold is a heuristic, not proof of duplicate content. Ranking comparisons do not measure relevance; evaluating retrieval quality requires labeled queries or another explicit relevance rule. In the interactive prompt, enter `analytics search`, then provide the JSON query and desired result count.
+
+`benchmark` measures search latency on the selected checkpoint without changing the store, reporting median and p95 latency plus searches per second. Use the root `benchmark.py` when comparing single and bulk insertion across synthetic dataset sizes.
+
+`analytics training` summarizes the recent combined training-loss history. NeuralStore retains up to 5,000 recent loss values in memory and checkpoints; older checkpoints without loss history remain loadable, but show no historical points. This history records the combined training loss only and does not establish generalization or retrieval quality.
+
+`analytics evaluate` measures labeled retrieval using mean Precision@K, Recall@K, and Mean Reciprocal Rank (MRR). Provide a JSON array where every item has a query and a non-empty list of relevant record IDs, for example:
+
+```json
+[
+    {"query": {"role": "engineer"}, "relevant_ids": ["user-001", "user-003"]},
+    {"query": {"role": "maintainer"}, "relevant_ids": ["user-002"]}
+]
+```
+
+The evaluation file is supplied by the user; example IDs must match the evaluation dataset. Metrics depend on the quality of those relevance labels.
+
+This repository includes a small example at `evaluation_queries.json` for the bundled sample records. Try it with:
+
+```text
+python main.py --db sample_neuralstore.pt analytics evaluate evaluation_queries.json --top-k 5
+```
+
+This example expects `sample_neuralstore.pt` to contain the three bundled sample records. If you have not created that checkpoint yet, import them first using the sample-data instructions below.
 
 ## Draft benchmark
 

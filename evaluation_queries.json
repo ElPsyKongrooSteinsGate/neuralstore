@@ -1,0 +1,14 @@
+[
+  {
+    "query": {"record_metadata": {"store_id": "NYC-FLAGSHIP-04"}},
+    "relevant_ids": ["sampledata"]
+  },
+  {
+    "query": {"device_metadata": {"node_id": "EDGE-SW-IOT-09"}},
+    "relevant_ids": ["telemetry-994"]
+  },
+  {
+    "query": {"shipment_metadata": {"tracking_code": "TRK-99281-AZ"}},
+    "relevant_ids": ["supply-chain-logistics-8821"]
+  }
+]

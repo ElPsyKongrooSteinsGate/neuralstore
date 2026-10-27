@@ -237,6 +237,7 @@ class NeuralStore:
     """
 
     VERSION = 5
+    MAX_LOSS_HISTORY = 5000
 
     def __init__(
         self,
@@ -289,7 +290,16 @@ class NeuralStore:
 
         self.training_steps = 0
         self.last_loss: Optional[float] = None
+        self.loss_history: list[float] = []
         self.model.eval()
+
+    def _record_training_loss(self, loss: torch.Tensor) -> None:
+        """Update latest loss and retain a bounded rolling history."""
+        value = float(loss.detach().item())
+        self.last_loss = value
+        self.loss_history.append(value)
+        if len(self.loss_history) > self.MAX_LOSS_HISTORY:
+            del self.loss_history[: len(self.loss_history) - self.MAX_LOSS_HISTORY]
 
     @staticmethod
     def _check_id(record_id: str):
@@ -425,7 +435,7 @@ class NeuralStore:
             self.optimizer.step()
 
             self.training_steps += 1
-            self.last_loss = float(loss.detach().item())
+            self._record_training_loss(loss)
 
         self.model.eval()
         with torch.no_grad():
@@ -506,7 +516,7 @@ class NeuralStore:
                 )
                 self.optimizer.step()
                 self.training_steps += 1
-                self.last_loss = float(loss.detach().item())
+                self._record_training_loss(loss)
 
             self.model.eval()
             with torch.no_grad():
@@ -710,6 +720,7 @@ class NeuralStore:
             "last_latent": self.last_latent,
             "training_steps": self.training_steps,
             "last_loss": self.last_loss,
+            "loss_history": self.loss_history,
         }
         torch.save(checkpoint, path)
 
@@ -753,6 +764,7 @@ class NeuralStore:
         store.record_importance = checkpoint.get("record_importance", {})
         store.training_steps = checkpoint["training_steps"]
         store.last_loss = checkpoint["last_loss"]
+        store.loss_history = checkpoint.get("loss_history", [])[-cls.MAX_LOSS_HISTORY :]
 
         store.model.eval()
         store._refresh_memory()

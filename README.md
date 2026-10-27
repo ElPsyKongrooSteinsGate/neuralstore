@@ -40,7 +40,7 @@ store.save("neuralstore.pt")
 restored = NeuralStore.load("neuralstore.pt")
 ```
 
-Insertion and update perform online training, so they are more computationally expensive than ordinary dictionary operations. The first record has no preceding record for sequence-prediction training.
+Insertion and update perform online training, so they are more computationally expensive than ordinary dictionary operations. The first record has no preceding record for sequence-prediction training. Use `insert_many()` or `import-json` for bulk data: records are trained in mini-batches and learned search keys are refreshed once after the batch.
 
 ## Command-line usage
 
@@ -60,7 +60,7 @@ Use `python main.py --help` to see the command options.
 
 ## Draft benchmark
 
-Run `python benchmark.py` to measure approximate insert and search latency at several record counts. By default, it tests 100, 500, and 1,000 records and reports median and p95 timings. This is a local microbenchmark draft, not a rigorous performance test; results vary with hardware, Python/PyTorch builds, and system load. It creates temporary in-memory stores and does not modify the saved database.
+Run `python benchmark.py` to measure approximate single-record insert latency, bulk-insert total/per-record time, and search latency at several record counts. By default, it tests 100, 500, and 1,000 records and reports median and p95 timings where applicable. This is a local microbenchmark draft, not a rigorous performance test; results vary with hardware, Python/PyTorch builds, and system load. It creates temporary in-memory stores and does not modify the saved database.
 
 You can choose sizes and reduce the work for a quick check:
 
@@ -78,7 +78,7 @@ One local run produced the following results (times are approximate and machine-
 | 500 | 86.94 ms | 174.98 ms | 11.95 ms | 16.38 ms | 500 |
 | 1,000 | 177.21 ms | 359.10 ms | 24.00 ms | 28.95 ms | 1,000 |
 
-This is a single draft run, not a statistically rigorous benchmark. Search latency rises with record count because search compares the query against every stored record. Insert latency also grows because each insertion trains the model and refreshes learned record keys. Re-run on the target machine under representative conditions before using these figures for capacity planning.
+These are pre-optimization baseline figures from a single draft run, not a statistically rigorous benchmark. Search latency rises with record count because search still compares against every stored record, although similarities are now computed with vectorized tensor operations. Individual `insert()` calls still train and refresh the keys; bulk `insert_many()` and JSON imports amortize the refresh and train records in mini-batches. Re-run the benchmark on the target machine after changes before using figures for capacity planning.
 
 The `import-json` command accepts three JSON formats. The recommended format for one record is an object with an `id` and a `record` property. The `record` can contain any valid JSON data, including nested objects and arrays:
 
@@ -122,7 +122,7 @@ python main.py import-json records.json
 
 ### Import and search the included sample
 
-The sample file at `sample_data/sampledata.json` contains one record with ID `sampledata`. From the project directory in Windows Command Prompt, import it into a separate checkpoint and search for its store ID:
+The sample file at `sample_data/sampledata.json` contains three records, including IDs `sampledata`, `telemetry-994`, and `supply-chain-logistics-8821`. From the project directory in Windows Command Prompt, import them into a separate checkpoint and search for the store ID:
 
 ```text
 python main.py --db sample_neuralstore.pt import-json sample_data/sampledata.json
@@ -130,7 +130,17 @@ python main.py --db sample_neuralstore.pt search "{\"record_metadata\": {\"store
 python main.py --db sample_neuralstore.pt read sampledata
 ```
 
-The `--db` option keeps this example's data in `sample_neuralstore.pt` rather than mixing it with the default `neuralstore.pt` database. Run the import command only once for that checkpoint; importing again will report that `sampledata` already exists.
+The `--db` option keeps this example's data in `sample_neuralstore.pt` rather than mixing it with the default `neuralstore.pt` database. Run the import command only once for that checkpoint; importing again will report that the record IDs already exist.
+
+## Tests
+
+Run the regression tests from the project directory with:
+
+```text
+python -m unittest discover -s tests -v
+```
+
+The tests cover batch insertion, JSON import, search ranking, update/delete behavior, and checkpoint save/load. One integration test imports the actual `sample_data/sampledata.json` file into a temporary store, reads and searches records, updates and deletes records, and verifies that the changes survive checkpoint reload. Temporary checkpoints are used, so the tests do not modify your regular database files.
 
 ## Technical specification
 
@@ -162,9 +172,9 @@ The importance target is derived from the current record's reconstruction error,
 
 #### 3. `NeuralStore`
 
-The store maintains separate in-memory mappings for original records, encoded features, learned memory keys, and importance values. `insert()` and `update()` run a configurable number of optimization steps using reconstruction loss, an adjacent-record prediction loss when a previous latent exists, and importance-estimation loss. The optimizer is AdamW and gradients are clipped.
+The store maintains separate in-memory mappings for original records, encoded features, learned memory keys, cached normalized feature vectors, and importance values. `insert()` and `update()` run a configurable number of optimization steps using reconstruction loss, an adjacent-record prediction loss when a previous latent exists, and importance-estimation loss. `insert_many()` validates the full batch first, trains records in mini-batches while retaining their input order for stream state, then refreshes learned keys in bounded batches. The optimizer is AdamW and gradients are clipped.
 
-Search computes cosine similarities between the query and each record in both latent space and encoded-feature space. The final score is:
+Search computes cosine similarities between the query and each record in both latent space and encoded-feature space. Per-record scores use vectorized tensor operations, but the current implementation still scans all records. The final score is:
 
 `score = latent_weight * latent_score + (1 - latent_weight) * feature_score`
 
@@ -175,7 +185,8 @@ Results are sorted in descending score order. Similarity quality depends on the 
 | Method | Behavior |
 | --- | --- |
 | `NeuralStore(...)` | Creates an empty store and model. |
-| `insert(record_id, record)` | Adds a new record and trains online. Raises `ValueError` for an invalid ID or non-JSON-serializable value, and `KeyError` if the ID already exists. |
+| `insert(record_id, record)` | Adds one new record and trains online. Raises `ValueError` for an invalid ID or non-JSON-serializable value, and `KeyError` if the ID already exists. |
+| `insert_many(records)` | Validates and inserts a list of `(record_id, record)` pairs, trains in mini-batches, and refreshes search keys once. Returns the number inserted. |
 | `read(record_id)` | Returns the stored record; raises `KeyError` if absent. |
 | `update(record_id, record)` | Replaces an existing record and trains online; raises `KeyError` if absent. |
 | `delete(record_id)` | Removes an existing record; raises `KeyError` if absent. |
@@ -192,14 +203,14 @@ Results are sorted in descending score order. Similarity quality depends on the 
 
 ### Persistence and ordering
 
-Records are serialized as JSON in the checkpoint, while model and optimizer tensors are saved with PyTorch. Checkpoint loading currently requires the stored version to match the implementation's `VERSION`. Feature encoding is deterministic, but learned embeddings depend on model weights and training history. Stream state follows the store's record insertion order; deleting a record does not currently rebuild the recurrent state.
+Records are serialized as JSON in the checkpoint, while model and optimizer tensors are saved with PyTorch. Checkpoint loading currently requires the stored version to match the implementation's `VERSION`. Feature encoding is deterministic, but learned embeddings depend on model weights and training history. Stream state follows record insertion order and is rebuilt after updates and deletes.
 
 ## Limitations and considerations
 
 - All records and derived vectors are held in memory; search scans every record, so it is linear in the number of records.
 - This implementation is single-process and provides no transaction, locking, or concurrent-write guarantees.
 - `read()` returns the stored Python object directly. Mutating that object externally bypasses feature regeneration and model training; use `update()` to make changes visible to the store's derived representations.
-- `delete()` removes the record and its associated feature/key entries, but does not retrain the model or rebuild the sequential state.
+- `delete()` removes the record and its associated feature/key entries and rebuilds sequential state, but does not retrain the model.
 - Training occurs on insert/update and can be slow for large records or high `online_steps` values.
 - Feature hashing can collide, and the fixed `max_fields` limit truncates records with many flattened fields.
 - Importance is a learned reconstruction-surprise estimate, not a calibrated or human-verified measure of importance.

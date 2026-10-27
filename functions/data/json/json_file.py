@@ -74,7 +74,4 @@ def import_json_file(store: NeuralStore, path: str | Path) -> int:
             + ", ".join(repr(item) for item in conflicts)
         )
 
-    for record_id, record in records:
-        store.insert(record_id, record)
-
-    return len(records)
+    return store.insert_many(records)

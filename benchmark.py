@@ -45,25 +45,35 @@ def benchmark_size(
     replay_batch_size: int,
     search_repeats: int,
 ) -> None:
-    """Build a store of the requested size and report basic latency stats."""
+    """Compare sequential inserts with one batched insert and time search."""
     store = NeuralStore(
         seed=7,
         online_steps=online_steps,
         replay_batch_size=replay_batch_size,
     )
     insert_times: list[float] = []
+    entries = [(f"record-{index}", make_record(index)) for index in range(size)]
 
-    for index in range(size):
+    for record_id, record in entries:
         start = time.perf_counter()
-        store.insert(f"record-{index}", make_record(index))
+        store.insert(record_id, record)
         insert_times.append(time.perf_counter() - start)
 
+    bulk_store = NeuralStore(
+        seed=7,
+        online_steps=online_steps,
+        replay_batch_size=replay_batch_size,
+    )
+    start = time.perf_counter()
+    bulk_store.insert_many(entries)
+    bulk_insert_seconds = time.perf_counter() - start
+
     query = {"department": "team-3", "active": True}
-    store.search(query, top_k=5)  # Warm-up.
+    bulk_store.search(query, top_k=5)  # Warm-up.
     search_times: list[float] = []
     for _ in range(search_repeats):
         start = time.perf_counter()
-        store.search(query, top_k=5)
+        bulk_store.search(query, top_k=5)
         search_times.append(time.perf_counter() - start)
 
     insert_median_ms = statistics.median(insert_times) * 1000
@@ -73,8 +83,15 @@ def benchmark_size(
 
     print(f"Records: {size:,}")
     print(f"  Insert median / p95: {insert_median_ms:.2f} / {insert_p95_ms:.2f} ms")
+    print(
+        f"  Bulk insert total / per record: {bulk_insert_seconds * 1000:.2f} / "
+        f"{bulk_insert_seconds * 1000 / size:.2f} ms"
+    )
     print(f"  Search median / p95: {search_median_ms:.2f} / {search_p95_ms:.2f} ms")
-    print(f"  Training steps: {store.training_steps:,}")
+    print(
+        f"  Training steps (single / bulk): "
+        f"{store.training_steps:,} / {bulk_store.training_steps:,}"
+    )
 
 
 def main() -> None:

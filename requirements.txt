@@ -1,0 +1,3 @@
+# PyTorch is the only third-party runtime dependency.
+# Choose the CPU/CUDA build appropriate for your system from https://pytorch.org/get-started/locally/.
+torch>=2.0

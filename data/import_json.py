@@ -1,4 +1,4 @@
-"""Load records from JSON files into a NeuralStore instance."""
+"""Import records from JSON files into a NeuralStore instance."""
 
 from __future__ import annotations
 
@@ -10,11 +10,7 @@ from neuralstore import NeuralStore
 
 
 def _records_from_payload(payload: Any) -> list[tuple[str, Any]]:
-    """Normalize supported JSON shapes into (record_id, record) pairs.
-
-    Supported formats are an ID-to-record mapping, a single object with ``id``
-    and ``record`` fields, or a list of objects with those fields.
-    """
+    """Normalize supported JSON shapes into (record_id, record) pairs."""
     if isinstance(payload, dict) and "id" in payload and "record" in payload:
         items = [(payload["id"], payload["record"])]
     elif isinstance(payload, dict):
@@ -51,11 +47,7 @@ def _records_from_payload(payload: Any) -> list[tuple[str, Any]]:
 
 
 def import_json_file(store: NeuralStore, path: str | Path) -> int:
-    """Insert records from a JSON file and return the number imported.
-
-    The complete file is parsed and validated before insertion. Existing IDs
-    are rejected rather than overwritten.
-    """
+    """Validate and insert records from a JSON file; return their count."""
     source = Path(path)
     try:
         with source.open("r", encoding="utf-8") as file:
@@ -74,7 +66,4 @@ def import_json_file(store: NeuralStore, path: str | Path) -> int:
             + ", ".join(repr(item) for item in conflicts)
         )
 
-    for record_id, record in records:
-        store.insert(record_id, record)
-
-    return len(records)
+    return store.insert_many(records)

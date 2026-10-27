@@ -5,5 +5,10 @@
 __pycache__/
 *.py[cod]
 
+# PyInstaller build artifacts
+/build/
+/dist/
+*.spec
+
 # VS Code workspace settings
 .vscode/

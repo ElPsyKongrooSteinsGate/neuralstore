@@ -275,6 +275,10 @@ class NeuralStore:
         self.records: dict[str, Any] = {}
         self.features: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
         self.memory_keys: dict[str, torch.Tensor] = {}
+        self.feature_keys: dict[str, torch.Tensor] = {}
+        self._memory_ids: list[str] = []
+        self._memory_matrix = torch.empty(0, latent_dim)
+        self._feature_matrix = torch.empty(0, field_dim)
         self.record_importance: dict[str, float] = {}
 
         self.stream_state = torch.zeros(latent_dim)
@@ -311,25 +315,47 @@ class NeuralStore:
             ).squeeze(0).clone()
 
     def _refresh_memory(self):
-        self.memory_keys = {
-            rid: self._embed(fields, mask)
-            for rid, (fields, mask) in self.features.items()
-        }
+        """Recompute latent and raw-feature keys in bounded batches."""
+        self.model.eval()
+        memory_keys: dict[str, torch.Tensor] = {}
+        feature_keys: dict[str, torch.Tensor] = {}
+        ids = list(self.features)
 
-    def _learn_online(self, new_id: str):
+        with torch.no_grad():
+            for start in range(0, len(ids), 256):
+                batch_ids = ids[start : start + 256]
+                fields = torch.stack([self.features[rid][0] for rid in batch_ids])
+                masks = torch.stack([self.features[rid][1] for rid in batch_ids])
+                embeddings = self.model.encode(fields, masks)
+
+                raw = (fields * masks.unsqueeze(-1)).sum(dim=1)
+                raw = F.normalize(raw, p=2, dim=-1)
+                for index, rid in enumerate(batch_ids):
+                    memory_keys[rid] = embeddings[index].clone()
+                    feature_keys[rid] = raw[index].clone()
+
+        self.memory_keys = memory_keys
+        self.feature_keys = feature_keys
+        self._memory_ids = ids
+        if ids:
+            self._memory_matrix = torch.stack([memory_keys[rid] for rid in ids])
+            self._feature_matrix = torch.stack([feature_keys[rid] for rid in ids])
+        else:
+            self._memory_matrix = torch.empty(0, self.latent_dim)
+            self._feature_matrix = torch.empty(0, self.field_dim)
+
+    def _learn_online(
+        self,
+        new_id: str,
+        refresh_memory: bool = True,
+        train_sequence: bool = True,
+        advance_stream: bool = True,
+    ):
         ids = list(self.features)
         if not ids:
             return
 
         old_state = self.stream_state.clone()
-        previous_state_before = (
-            self.last_state_before.clone()
-            if self.last_state_before is not None else None
-        )
-        previous_latent = (
-            self.last_latent.clone() if self.last_latent is not None else None
-        )
-
         for _ in range(self.online_steps):
             count = min(self.replay_batch_size, len(ids))
             sampled = random.sample(ids, count)
@@ -360,7 +386,7 @@ class NeuralStore:
             current_z, current_reconstructed, current_target = self.model(
                 current_fields_unsqueezed, current_mask_unsqueezed
             )
-            if self.last_latent is not None:
+            if train_sequence and self.last_latent is not None:
                 previous_z = self.last_latent.detach().unsqueeze(0)
                 transitioned_state, _ = self.model.advance_state_with_importance(
                     old_state.unsqueeze(0), previous_z
@@ -401,38 +427,142 @@ class NeuralStore:
             self.training_steps += 1
             self.last_loss = float(loss.detach().item())
 
-        # Advance state using the now-trained importance score
         self.model.eval()
         with torch.no_grad():
             current_z = self.model.encode(
                 current_fields_unsqueezed, current_mask_unsqueezed
             ).squeeze(0)
+            importance = self.model.importance_head(current_z.unsqueeze(0)).squeeze()
 
-            new_state, importance = self.model.advance_state_with_importance(
-                old_state, current_z
-            )
-            self.stream_state = new_state.detach().clone()
-            self.last_state_before = old_state.detach().clone()
-            self.last_latent = current_z.detach().clone()
+            if advance_stream:
+                new_state, importance = self.model.advance_state_with_importance(
+                    old_state, current_z
+                )
+                self.stream_state = new_state.detach().clone()
+                self.last_state_before = old_state.detach().clone()
+                self.last_latent = current_z.detach().clone()
             self.record_importance[new_id] = float(importance.item())
 
         self.model.eval()
-        self._refresh_memory()
+        if refresh_memory:
+            self._refresh_memory()
+
+    def _learn_batch(self, new_ids: list[str]) -> None:
+        """Train new records in mini-batches and advance stream state in order."""
+        historical_ids = [rid for rid in self.records if rid not in set(new_ids)]
+
+        for start in range(0, len(new_ids), self.replay_batch_size):
+            batch_ids = new_ids[start : start + self.replay_batch_size]
+            replay_count = max(0, self.replay_batch_size - len(batch_ids))
+            replay_ids = random.sample(
+                historical_ids, min(replay_count, len(historical_ids))
+            )
+            fields = torch.stack(
+                [self.features[rid][0] for rid in replay_ids + batch_ids]
+            )
+            masks = torch.stack(
+                [self.features[rid][1] for rid in replay_ids + batch_ids]
+            )
+            current_count = len(batch_ids)
+
+            for _ in range(self.online_steps):
+                self.model.train()
+                z, reconstructed, target = self.model(fields, masks)
+                reconstruction_loss = F.mse_loss(reconstructed, target)
+
+                current_z = z[:current_count]
+                current_reconstruction_error = torch.mean(
+                    (reconstructed[:current_count] - target[:current_count]) ** 2,
+                    dim=-1,
+                )
+                target_importance = torch.clamp(
+                    current_reconstruction_error * 10.0, 0.0, 1.0
+                ).detach()
+                predicted_importance = self.model.importance_head(current_z).squeeze(-1)
+                importance_loss = F.mse_loss(predicted_importance, target_importance)
+
+                if self.last_latent is not None:
+                    transitioned_state, _ = self.model.advance_state_with_importance(
+                        self.stream_state, self.last_latent
+                    )
+                    predicted_next = self.model.predict_next(
+                        transitioned_state.unsqueeze(0)
+                    )
+                    prediction_loss = F.mse_loss(
+                        predicted_next, current_z[:1].detach()
+                    )
+                else:
+                    prediction_loss = reconstruction_loss.new_zeros(())
+
+                loss = (
+                    reconstruction_loss
+                    + 0.1 * prediction_loss
+                    + 0.2 * importance_loss
+                )
+                self.optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(), max_norm=1.0
+                )
+                self.optimizer.step()
+                self.training_steps += 1
+                self.last_loss = float(loss.detach().item())
+
+            self.model.eval()
+            with torch.no_grad():
+                current_fields = fields[:current_count]
+                current_masks = masks[:current_count]
+                current_latents = self.model.encode(current_fields, current_masks)
+                state = self.stream_state
+                for index, record_id in enumerate(batch_ids):
+                    state_before = state.clone()
+                    state, importance = self.model.advance_state_with_importance(
+                        state, current_latents[index]
+                    )
+                    state = state.detach().clone()
+                    self.last_state_before = state_before
+                    self.last_latent = current_latents[index].detach().clone()
+                    self.record_importance[record_id] = float(importance.item())
+                self.stream_state = state
 
     # ---------------- Exact CRUD ----------------
 
     def insert(self, record_id: str, record: Any):
-        self._check_id(record_id)
-        self._check_json(record)
+        self.insert_many([(record_id, record)])
 
-        if record_id in self.records:
-            raise KeyError(f"Record already exists: {record_id}")
+    def insert_many(self, records: list[tuple[str, Any]]) -> int:
+        """Insert multiple records, refreshing all learned keys once.
 
-        self.records[record_id] = record
-        self.features[record_id] = self._make_features(record)
-        self._learn_online(record_id)
+        IDs and JSON values are validated before any records are added. Records
+        are trained sequentially in the provided order, preserving stream order.
+        """
+        if not records:
+            return 0
+
+        seen_ids: set[str] = set()
+        prepared: list[tuple[str, Any, tuple[torch.Tensor, torch.Tensor]]] = []
+        for record_id, record in records:
+            self._check_id(record_id)
+            self._check_json(record)
+            if record_id in seen_ids or record_id in self.records:
+                raise KeyError(f"Record already exists: {record_id}")
+            seen_ids.add(record_id)
+            prepared.append((record_id, record, self._make_features(record)))
+
+        new_ids = [record_id for record_id, _, _ in prepared]
+        for record_id, record, features in prepared:
+            self.records[record_id] = record
+            self.features[record_id] = features
+
+        if len(prepared) == 1:
+            self._learn_online(new_ids[0], refresh_memory=False)
+        else:
+            self._learn_batch(new_ids)
+
+        self._refresh_memory()
         if self.autosave_path:
             self.save(self.autosave_path)
+        return len(prepared)
 
     def read(self, record_id: str) -> Any:
         if record_id not in self.records:
@@ -446,7 +576,13 @@ class NeuralStore:
 
         self.records[record_id] = record
         self.features[record_id] = self._make_features(record)
-        self._learn_online(record_id)
+        self._learn_online(
+            record_id,
+            train_sequence=False,
+            advance_stream=False,
+        )
+        # Updates should not make an older record the newest item in the stream.
+        self._rebuild_stream_state()
         if self.autosave_path:
             self.save(self.autosave_path)
 
@@ -457,7 +593,10 @@ class NeuralStore:
         del self.records[record_id]
         del self.features[record_id]
         self.memory_keys.pop(record_id, None)
+        self.feature_keys.pop(record_id, None)
         self.record_importance.pop(record_id, None)
+        self._refresh_memory()
+        self._rebuild_stream_state()
         if self.autosave_path:
             self.save(self.autosave_path)
 
@@ -514,36 +653,31 @@ class NeuralStore:
 
         q_fields, q_mask = self._make_features(query)
         q_z = self._embed(q_fields, q_mask)
-
         q_raw = (q_fields * q_mask.unsqueeze(-1)).sum(dim=0)
         q_raw = F.normalize(q_raw, p=2, dim=0)
 
+        ids = self._memory_ids
+        latent_scores = self._memory_matrix @ q_z
+        feature_scores = self._feature_matrix @ q_raw
+        scores = (
+            latent_weight * latent_scores
+            + (1.0 - latent_weight) * feature_scores
+        )
+
+        # Stable ordering preserves insertion order for equal-scoring records.
+        ranked_indices = torch.argsort(scores, descending=True, stable=True)
         results = []
-        for rid, record in self.records.items():
-            z = self.memory_keys[rid]
-            fields, mask = self.features[rid]
-
-            raw = (fields * mask.unsqueeze(-1)).sum(dim=0)
-            raw = F.normalize(raw, p=2, dim=0)
-
-            latent_score = torch.dot(q_z, z).item()
-            raw_score = torch.dot(q_raw, raw).item()
-            score = (
-                latent_weight * latent_score
-                + (1.0 - latent_weight) * raw_score
-            )
-
+        for index in ranked_indices[:top_k].tolist():
+            rid = ids[index]
             results.append({
                 "id": rid,
-                "record": record,
-                "score": float(score),
-                "latent_score": float(latent_score),
-                "feature_score": float(raw_score),
+                "record": self.records[rid],
+                "score": float(scores[index].item()),
+                "latent_score": float(latent_scores[index].item()),
+                "feature_score": float(feature_scores[index].item()),
                 "importance": self.record_importance.get(rid, 0.5),
             })
-
-        results.sort(key=lambda item: item["score"], reverse=True)
-        return results[:top_k]
+        return results
 
     @torch.no_grad()
     def predict_next_latent(self) -> list[float]:
